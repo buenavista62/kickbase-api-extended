@@ -826,8 +826,8 @@ class Kickbase:
         for md in mds:
             for game in md:
                 if game.get("t1i") == str(team_id):
-                    ngs.append(game.get("t2i"))
+                    ngs.append(("H", game.get("t2i")))
                 if game.get("t2i") == str(team_id):
-                    ngs.append(game.get("t1i"))
+                    ngs.append(("A", game.get("t1i")))
 
         return ngs
