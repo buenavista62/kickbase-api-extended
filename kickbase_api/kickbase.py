@@ -24,6 +24,7 @@ from kickbase_api.models.player import Player
 from kickbase_api.models.response.league_stats_response import LeagueStatsResponse
 from kickbase_api.models.user import User
 
+
 class Kickbase:
     base_url: str = None
     token: str = None
@@ -35,20 +36,20 @@ class Kickbase:
     _username: str = None
     _password: str = None
 
-    def __init__(self, base_url: str = 'https://api.kickbase.com', firestore_project: str = 'kickbase-bdb0f',
-                 google_identity_toolkit_api_key: str = None):
+    def __init__(
+        self,
+        base_url: str = "https://api.kickbase.com",
+        firestore_project: str = "kickbase-bdb0f",
+        google_identity_toolkit_api_key: str = None,
+    ):
         self.base_url = base_url
         self.firestore_project = firestore_project
         self.google_identity_toolkit_api_key = google_identity_toolkit_api_key
         # Hinzufügen einer wiederverwendbaren Session:
         self.session = requests.Session()
-        
+
     def login(self, username: str, password: str) -> (User, [LeagueData]):
-        data = {
-            "email": username,
-            "password": password,
-            "ext": False
-        }
+        data = {"email": username, "password": password, "ext": False}
 
         r = self._do_post("/user/login", data, False)
 
@@ -77,7 +78,9 @@ class Kickbase:
     def _is_firebase_token_valid(self):
         if self.firebase_token is None or self.firebase_token_expire is None:
             return False
-        return self.firebase_token_expire > datetime.now(timezone.utc) - timedelta(minutes=5)
+        return self.firebase_token_expire > datetime.now(timezone.utc) - timedelta(
+            minutes=5
+        )
 
     def leagues(self) -> [LeagueData]:
         r = self._do_get("/leagues/", True)
@@ -128,7 +131,9 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def league_user_stats(self, league: Union[str, LeagueData], user: Union[str, User]) -> LeagueUserStats:
+    def league_user_stats(
+        self, league: Union[str, LeagueData], user: Union[str, User]
+    ) -> LeagueUserStats:
         league_id = self._get_league_id(league)
         user_id = self._get_user_id(user)
 
@@ -139,21 +144,29 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def league_user_profile(self, league: Union[str, LeagueData], user: Union[str, User]) -> LeagueUserProfile:
+    def league_user_profile(
+        self, league: Union[str, LeagueData], user: Union[str, User]
+    ) -> LeagueUserProfile:
         league_id = self._get_league_id(league)
         user_id = self._get_user_id(user)
 
-        r = self._do_get("/leagues/{}/users/{}/profile".format(league_id, user_id), True)
+        r = self._do_get(
+            "/leagues/{}/users/{}/profile".format(league_id, user_id), True
+        )
 
         if r.status_code == 200:
             return LeagueUserProfile(r.json())
         else:
             raise KickbaseException()
 
-    def league_feed(self, start_index: int, league: Union[str, LeagueData]) -> [FeedItem]:
+    def league_feed(
+        self, start_index: int, league: Union[str, LeagueData]
+    ) -> [FeedItem]:
         league_id = self._get_league_id(league)
 
-        r = self._do_get("/leagues/{}/feed?start={}".format(league_id, start_index), True)
+        r = self._do_get(
+            "/leagues/{}/feed?start={}".format(league_id, start_index), True
+        )
 
         if r.status_code == 200:
             return [FeedItem(v) for v in r.json()["items"]]
@@ -163,9 +176,7 @@ class Kickbase:
     def post_feed_item(self, comment: str, league: Union[str, LeagueData]):
         league_id = self._get_league_id(league)
 
-        data = {
-            "comment": comment
-        }
+        data = {"comment": comment}
 
         r = self._do_post("/leagues/{}/feed".format(league_id), data, True)
 
@@ -174,39 +185,53 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def league_feed_comments(self, league: Union[str, LeagueData], feed_item: Union[str, FeedItem]) -> [
-        FeedItemComment]:
+    def league_feed_comments(
+        self, league: Union[str, LeagueData], feed_item: Union[str, FeedItem]
+    ) -> [FeedItemComment]:
         league_id = self._get_league_id(league)
         feed_item_id = self._get_feed_item_id(feed_item)
 
-        r = self._do_get("/leagues/{}/feed/{}/comments".format(league_id, feed_item_id), True)
+        r = self._do_get(
+            "/leagues/{}/feed/{}/comments".format(league_id, feed_item_id), True
+        )
 
         if r.status_code == 200:
             return [FeedItemComment(v) for v in r.json()["comments"]]
         else:
             raise KickbaseException()
 
-    def post_feed_comment(self, comment: str, league: Union[str, LeagueData], feed_item: Union[str, FeedItem]):
+    def post_feed_comment(
+        self,
+        comment: str,
+        league: Union[str, LeagueData],
+        feed_item: Union[str, FeedItem],
+    ):
         league_id = self._get_league_id(league)
         feed_item_id = self._get_feed_item_id(feed_item)
 
-        data = {
-            "comment": comment
-        }
+        data = {"comment": comment}
 
-        r = self._do_post("/leagues/{}/feed/{}/comments".format(league_id, feed_item_id), data, True)
+        r = self._do_post(
+            "/leagues/{}/feed/{}/comments".format(league_id, feed_item_id), data, True
+        )
 
         if r.status_code == 200:
             return
         else:
             raise KickbaseException()
 
-    def league_user_players(self, league: Union[str, LeagueData], user: Union[str, User], match_day: int = 0) -> [
-        Player]:
+    def league_user_players(
+        self, league: Union[str, LeagueData], user: Union[str, User], match_day: int = 0
+    ) -> [Player]:
         league_id = self._get_league_id(league)
         user_id = self._get_user_id(user)
 
-        r = self._do_get("/leagues/{}/users/{}/players?matchDay={}".format(league_id, user_id, match_day), True)
+        r = self._do_get(
+            "/leagues/{}/users/{}/players?matchDay={}".format(
+                league_id, user_id, match_day
+            ),
+            True,
+        )
 
         if r.status_code == 200:
             return [Player(v) for v in r.json()["players"]]
@@ -236,7 +261,7 @@ class Kickbase:
             raise KickbaseException()
 
     def search_player(self, search_query: str) -> [Player]:
-        r = self._do_get("/competition/search?t={}".format(search_query),True)
+        r = self._do_get("/competition/search?t={}".format(search_query), True)
 
         if r.status_code == 200:
             return [Player(v) for v in r.json()["p"]]
@@ -244,7 +269,7 @@ class Kickbase:
             raise KickbaseException()
 
     def team_players(self, team_id: str) -> [Player]:
-        r = self._do_get("/competition/teams/{}/players".format(team_id),True)
+        r = self._do_get("/competition/teams/{}/players".format(team_id), True)
 
         if r.status_code == 200:
             return [Player(v) for v in r.json()["p"]]
@@ -280,8 +305,10 @@ class Kickbase:
             players = list(executor.map(lambda p: self.fetch_user_id(p, league_id), players))
 
         return players """
-    
-    def get_player_market_value_last_n_days(self, league_id: str, player_id: str, days: int = 30) -> dict:
+
+    def get_player_market_value_last_n_days(
+        self, league_id: str, player_id: str, days: int = 30
+    ) -> dict:
         """Get the market value of a player from the last n days.
 
         Parameters:
@@ -294,7 +321,7 @@ class Kickbase:
         """
         if days > 360:
             raise ValueError("The maximum number of days is 360.")
-        
+
         endpoint = f"/leagues/{league_id}/players/{player_id}/stats"
         response = self._do_get(endpoint, True)
         data = response.json()
@@ -303,13 +330,16 @@ class Kickbase:
         market_values_list = data["marketValues"]
 
         # Sort the marketValues list by date in descending order
-        sorted_data = sorted(market_values_list, key=lambda x: datetime.fromisoformat(x['d'].replace("Z", "")), reverse=True)
-        
+        sorted_data = sorted(
+            market_values_list,
+            key=lambda x: datetime.fromisoformat(x["d"].replace("Z", "")),
+            reverse=True,
+        )
+
         # Get the market values for the last n days
-        last_n_days_market_values = [x['m'] for x in sorted_data[:days]]
+        last_n_days_market_values = [x["m"] for x in sorted_data[:days]]
         last_n_days_market_values.reverse()
         return last_n_days_market_values
-
 
     def top_25_players(self) -> [Player]:
         r = self._do_get("/competition/best?position=0")
@@ -335,10 +365,7 @@ class Kickbase:
         if not self._is_token_valid:
             self.login(self._username, self._password)
 
-        data = {
-            "type": line_up.type,
-            "players": line_up.players
-        }
+        data = {"type": line_up.type, "players": line_up.players}
 
         r = self._do_post("/leagues/{}/lineup".format(league_id), data, True)
 
@@ -357,14 +384,16 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def add_to_market(self, price: int, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def add_to_market(
+        self,
+        price: int,
+        player: Union[str, Player, MarketPlayer],
+        league: Union[str, LeagueData],
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
-        data = {
-            "playerId": player_id,
-            "price": price
-        }
+        data = {"playerId": player_id, "price": price}
 
         r = self._do_post("/leagues/{}/market".format(league_id), data, True)
 
@@ -373,7 +402,9 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def remove_from_market(self, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def remove_from_market(
+        self, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
@@ -384,63 +415,103 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def update_price(self, price: int, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def update_price(
+        self,
+        price: int,
+        player: Union[str, Player, MarketPlayer],
+        league: Union[str, LeagueData],
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
-        data = {
-            "price": price
-        }
+        data = {"price": price}
 
-        r = self._do_put("/leagues/{}/market/{}".format(league_id, player_id), data, True)
+        r = self._do_put(
+            "/leagues/{}/market/{}".format(league_id, player_id), data, True
+        )
 
         if r.status_code == 200:
             return
         else:
             raise KickbaseException()
 
-    def make_offer(self, price: int, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def make_offer(
+        self,
+        price: int,
+        player: Union[str, Player, MarketPlayer],
+        league: Union[str, LeagueData],
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
-        data = {
-            "price": price
-        }
+        data = {"price": price}
 
-        r = self._do_post("/leagues/{}/market/{}/offers".format(league_id, player_id), data, True)
+        r = self._do_post(
+            "/leagues/{}/market/{}/offers".format(league_id, player_id), data, True
+        )
 
         if r.status_code == 200:
             return
         else:
             raise KickbaseException()
 
-    def remove_offer(self, offer_id: str, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def remove_offer(
+        self,
+        offer_id: str,
+        player: Union[str, Player, MarketPlayer],
+        league: Union[str, LeagueData],
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
-        r = self._do_delete("/leagues/{}/market/{}/offers/{}".format(league_id, player_id, offer_id), True)
+        r = self._do_delete(
+            "/leagues/{}/market/{}/offers/{}".format(league_id, player_id, offer_id),
+            True,
+        )
 
         if r.status_code == 200:
             return
         else:
             raise KickbaseException()
 
-    def accept_offer(self, offer_id: str, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def accept_offer(
+        self,
+        offer_id: str,
+        player: Union[str, Player, MarketPlayer],
+        league: Union[str, LeagueData],
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
-        r = self._do_post("/leagues/{}/market/{}/offers/{}/accept".format(league_id, player_id, offer_id), {}, True)
+        r = self._do_post(
+            "/leagues/{}/market/{}/offers/{}/accept".format(
+                league_id, player_id, offer_id
+            ),
+            {},
+            True,
+        )
 
         if r.status_code == 200:
             return
         else:
             raise KickbaseException()
 
-    def decline_offer(self, offer_id: str, player: Union[str, Player, MarketPlayer], league: Union[str, LeagueData]):
+    def decline_offer(
+        self,
+        offer_id: str,
+        player: Union[str, Player, MarketPlayer],
+        league: Union[str, LeagueData],
+    ):
         player_id = self._get_player_id(player)
         league_id = self._get_league_id(league)
 
-        r = self._do_post("/leagues/{}/market/{}/offers/{}/decline".format(league_id, player_id, offer_id), {}, True)
+        r = self._do_post(
+            "/leagues/{}/market/{}/offers/{}/decline".format(
+                league_id, player_id, offer_id
+            ),
+            {},
+            True,
+        )
 
         if r.status_code == 200:
             return
@@ -460,35 +531,44 @@ class Kickbase:
             raise KickbaseException()
 
     def exchange_custom_token(self, chat_token: str):
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        
-        data = {
-            "returnSecureToken": True,
-            "token": chat_token
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-        r = requests.post(self._url_for_google_identity_toolkit(
-            "/v3/relyingparty/verifyCustomToken?key={}".format(self.google_identity_toolkit_api_key)), data=json.dumps(data),
-            headers=headers)
-        
+        data = {"returnSecureToken": True, "token": chat_token}
+
+        r = requests.post(
+            self._url_for_google_identity_toolkit(
+                "/v3/relyingparty/verifyCustomToken?key={}".format(
+                    self.google_identity_toolkit_api_key
+                )
+            ),
+            data=json.dumps(data),
+            headers=headers,
+        )
+
         if r.status_code == 200:
             j = r.json()
             self.firebase_token = j["idToken"]
-            self.firebase_token_expire = datetime.now(timezone.utc) + timedelta(seconds=int(j["expiresIn"]))
+            self.firebase_token_expire = datetime.now(timezone.utc) + timedelta(
+                seconds=int(j["expiresIn"])
+            )
         else:
-            raise KickbaseException("There was an error exchanging custom token for firebase token")
-        
+            raise KickbaseException(
+                "There was an error exchanging custom token for firebase token"
+            )
+
     def _update_firebase_token(self):
         token = self.chat_token()
         self.exchange_custom_token(token)
 
-    def chat_messages(self, league: Union[str, LeagueData], page_size: int = 30, next_page_token: str = None) -> ([ChatItem], str):
+    def chat_messages(
+        self,
+        league: Union[str, LeagueData],
+        page_size: int = 30,
+        next_page_token: str = None,
+    ) -> ([ChatItem], str):
         if self.google_identity_toolkit_api_key is None:
             return []
-        
+
         league_id = self._get_league_id(league)
 
         if not self._is_token_valid():
@@ -500,12 +580,24 @@ class Kickbase:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": "Bearer {}".format(self.firebase_token)
+            "Authorization": "Bearer {}".format(self.firebase_token),
         }
         if next_page_token is None:
-            r = requests.get(self._url_for_firestore("/chat/{}/messages?pageSize={}".format(league_id, page_size)), headers=headers)
+            r = requests.get(
+                self._url_for_firestore(
+                    "/chat/{}/messages?pageSize={}".format(league_id, page_size)
+                ),
+                headers=headers,
+            )
         else:
-            r = requests.get(self._url_for_firestore("/chat/{}/messages?pageSize={}&pageToken={}".format(league_id, page_size, next_page_token)), headers=headers)
+            r = requests.get(
+                self._url_for_firestore(
+                    "/chat/{}/messages?pageSize={}&pageToken={}".format(
+                        league_id, page_size, next_page_token
+                    )
+                ),
+                headers=headers,
+            )
 
         if r.status_code == 200:
             j = r.json()
@@ -520,7 +612,7 @@ class Kickbase:
     def post_chat_message(self, message: str, league: Union[str, LeagueData]):
         if self.google_identity_toolkit_api_key is None:
             return
-        
+
         league_id = self._get_league_id(league)
 
         if not self._is_token_valid():
@@ -532,38 +624,25 @@ class Kickbase:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": "Bearer {}".format(self.firebase_token)
+            "Authorization": "Bearer {}".format(self.firebase_token),
         }
-        
+
         data = {
             "fields": {
-                "userId": {
-                    "stringValue": self.user.id
-                },
-                "message": {
-                    "stringValue": message
-                },
-                "leagueId": {
-                    "stringValue": league_id
-                },
-                "date": {
-                    "stringValue": date_to_string(datetime.utcnow())
-                },
-                "username": {
-                    "stringValue": self.user.name
-                },
-                "seenBy": {
-                    "arrayValue": {
-                        "values": [{
-                            "stringValue": self.user.id
-                        }]
-                    }
-                }
+                "userId": {"stringValue": self.user.id},
+                "message": {"stringValue": message},
+                "leagueId": {"stringValue": league_id},
+                "date": {"stringValue": date_to_string(datetime.utcnow())},
+                "username": {"stringValue": self.user.name},
+                "seenBy": {"arrayValue": {"values": [{"stringValue": self.user.id}]}},
             }
         }
 
-        r = requests.post(self._url_for_firestore("/chat/{}/messages".format(league_id)), 
-                          data=json.dumps(data), headers=headers)
+        r = requests.post(
+            self._url_for_firestore("/chat/{}/messages".format(league_id)),
+            data=json.dumps(data),
+            headers=headers,
+        )
 
         if r.status_code == 200:
             return
@@ -584,7 +663,9 @@ class Kickbase:
             return player.id
         if isinstance(player, MarketPlayer):
             return player.id
-        raise KickbaseException("player must be either type of str, Player or MarketPlayer")
+        raise KickbaseException(
+            "player must be either type of str, Player or MarketPlayer"
+        )
 
     def _get_user_id(self, user: any):
         if isinstance(user, str):
@@ -601,8 +682,12 @@ class Kickbase:
         raise KickbaseException("feed_item must be either type of str or FeedItem")
 
     def _url_for_firestore(self, document_endpoint: str):
-        return "https://firestore.googleapis.com/v1/projects/{}/databases/(default)/documents".format(
-            self.firestore_project) + document_endpoint
+        return (
+            "https://firestore.googleapis.com/v1/projects/{}/databases/(default)/documents".format(
+                self.firestore_project
+            )
+            + document_endpoint
+        )
 
     def _url_for_google_identity_toolkit(self, endpoint: str):
         return "https://www.googleapis.com/identitytoolkit" + endpoint
@@ -614,10 +699,7 @@ class Kickbase:
         return "kkstrauth={}".format(self.token)
 
     def _do_get(self, endpoint: str, authenticated: bool = False, retries=3):
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if authenticated:
             headers["Cookie"] = self._auth_cookie()
 
@@ -632,41 +714,36 @@ class Kickbase:
                     continue
                 else:
                     raise
-                
+
     def _do_post(self, endpoint: str, data: dict, authenticated: bool = False):
         if authenticated and not self._is_token_valid():
             self.login(self._username, self._password)
 
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if authenticated:
             headers["Cookie"] = self._auth_cookie()
 
-        return requests.post(self._url_for_endpoint(endpoint), data=json.dumps(data), headers=headers)
+        return requests.post(
+            self._url_for_endpoint(endpoint), data=json.dumps(data), headers=headers
+        )
 
     def _do_put(self, endpoint: str, data: dict, authenticated: bool = False):
-        if authenticated and  not self._is_token_valid():
+        if authenticated and not self._is_token_valid():
             self.login(self._username, self._password)
 
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if authenticated:
             headers["Cookie"] = self._auth_cookie()
 
-        return requests.put(self._url_for_endpoint(endpoint), data=json.dumps(data), headers=headers)
+        return requests.put(
+            self._url_for_endpoint(endpoint), data=json.dumps(data), headers=headers
+        )
 
     def _do_delete(self, endpoint: str, authenticated: bool = False):
-        if authenticated and  not self._is_token_valid():
+        if authenticated and not self._is_token_valid():
             self.login(self._username, self._password)
 
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if authenticated:
             headers["Cookie"] = self._auth_cookie()
 
@@ -702,7 +779,9 @@ class Kickbase:
                     print(f"Error fetching players in range: {e}")
 
         with ThreadPoolExecutor(max_workers=16) as executor:
-            futures = [executor.submit(self.fetch_user_id, p, league_id) for p in players]
+            futures = [
+                executor.submit(self.fetch_user_id, p, league_id) for p in players
+            ]
             for i, future in enumerate(as_completed(futures)):
                 try:
                     players[i] = future.result()
@@ -711,7 +790,7 @@ class Kickbase:
 
         return players
 
-    def leagueTable(self, matchDay = 0):
+    def leagueTable(self, matchDay=0):
         url = f"/competition/table?matchDay={matchDay}"
         r = self._do_get(url, True)
         if r.status_code == 200:
@@ -719,8 +798,8 @@ class Kickbase:
             return data
         else:
             raise KickbaseException()
-    
-    def matches(self, matchDay = 0):
+
+    def matches(self, matchDay=0):
         url = f"/competition/matches?matchDay={matchDay}"
         r = self._do_get(url, True)
         if r.status_code == 200:
@@ -728,4 +807,27 @@ class Kickbase:
             return data
         else:
             raise KickbaseException()
-            
+
+    def get_next_games(self, team_id, next_n_games=5):
+        # get current md
+        url = f"/competition/matches?matchDay="
+        r = self._do_get(url, True)
+        if r.status_code == 200:
+            cmd = r.json().get("cmd")
+
+        # get next n mds
+        mds = []
+        for i in range(cmd, cmd + 5):
+            url = f"/competition/matches?matchDay={i}"
+            r = self._do_get(url, True)
+            if r.status_code == 200:
+                mds.append(r.json().get("m"))
+        ngs = []
+        for md in mds:
+            for game in md:
+                if game.get("t1i") == str(team_id):
+                    ngs.append(game.get("t2i"))
+                if game.get("t2i") == str(team_id):
+                    ngs.append(game.get("t1i"))
+
+        return ngs
