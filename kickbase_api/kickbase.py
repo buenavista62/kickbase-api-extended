@@ -758,9 +758,10 @@ class Kickbase:
             raise KickbaseException()
 
     def fetch_user_id(self, player, league_id):
-        url = f"/leagues/{league_id}/players/{player.id}"
+        url = f"/leagues/{league_id}/players/{player.id}/stats"
         r = self._do_get(url, True)
         if r.status_code == 200:
+            player.seasons = r.json().get("seasons")
             user_id = r.json().get("userId")
             if user_id is not None:
                 player.user_id = user_id
@@ -768,7 +769,7 @@ class Kickbase:
 
     def get_all_players(self, league_id) -> [Player]:
         players = []
-        ranges = [(i, i + 24) for i in range(0, 600, 25)]
+        ranges = [(i, i + 24) for i in range(0, 700, 25)]
 
         with ThreadPoolExecutor(max_workers=16) as executor:
             futures = [executor.submit(self.fetch_players_in_range, *r) for r in ranges]

@@ -37,8 +37,8 @@ def _map_player_position(v):
         return PlayerPosition(v)
     except:
         return PlayerPosition.UNKNOWN
-    
-    
+
+
 class Player(BaseModel):
     id: str = None
     first_name: str = None
@@ -52,7 +52,8 @@ class Player(BaseModel):
     status: PlayerStatus = None
     team_id: str = None
     user_id: str = None
-    
+    seasons: str = None
+
     profile_path: str = None
     profile_big_path: str = None
     team_path: str = None
@@ -61,7 +62,7 @@ class Player(BaseModel):
     def __init__(self, d: dict = {}):
         self._json_transform = {
             "position": _map_player_position,
-            "status": _map_player_status
+            "status": _map_player_status,
         }
         self._json_mapping = {
             "firstName": "first_name",
@@ -74,6 +75,7 @@ class Player(BaseModel):
             "profileBig": "profile_big_path",
             "team": "team_path",
             "teamCover": "team_cover_path",
-            "userId": "user_id"
+            "userId": "user_id",
+            "seasons": "seasons",
         }
         super().__init__(d)
