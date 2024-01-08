@@ -276,36 +276,6 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    """    
-    def fetch_players_in_range(self, start, end):
-        url = f"/competition/search?start={start}&end={end}"
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            return [Player(v) for v in r.json()["p"]]
-        else:
-            raise KickbaseException()
-
-    def fetch_user_id(self, player, league_id):
-        url = f"/leagues/{league_id}/players/{player.id}"
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            user_id = r.json().get("userId")
-            if user_id is not None:
-                player.user_id = user_id
-        return player
-
-    def get_all_players(self, league_id) -> [Player]:
-        players = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            ranges = [(i, i + 24) for i in range(0, 700, 25)]
-            player_lists = executor.map(lambda r: self.fetch_players_in_range(*r), ranges)
-            players = [player for player_list in player_lists for player in player_list]
-        
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            players = list(executor.map(lambda p: self.fetch_user_id(p, league_id), players))
-
-        return players """
-
     def get_player_market_value_last_n_days(
         self, league_id: str, player_id: str, days: int = 30
     ) -> dict:
@@ -809,12 +779,16 @@ class Kickbase:
         else:
             raise KickbaseException()
 
-    def get_next_games(self, team_id, next_n_games=5):
-        # get current md
+    def get_current_md(self):
         url = f"/competition/matches?matchDay="
         r = self._do_get(url, True)
         if r.status_code == 200:
             cmd = r.json().get("cmd")
+        return cmd
+
+    def get_next_games(self, team_id, next_n_games=5):
+        # get current md
+        cmd = get_current_md()
 
         # get next n mds
         mds = []
