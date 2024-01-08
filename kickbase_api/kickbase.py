@@ -788,7 +788,7 @@ class Kickbase:
 
     def get_next_games(self, team_id, next_n_games=5):
         # get current md
-        cmd = get_current_md()
+        cmd = self.get_current_md()
 
         # get next n mds
         mds = []
