@@ -4,7 +4,7 @@ import requests
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
-
+import httpx
 from kickbase_api.exceptions import KickbaseLoginException, KickbaseException
 from kickbase_api.models._transforms import parse_date, date_to_string
 from kickbase_api.models.chat_item import ChatItem
@@ -685,17 +685,29 @@ class Kickbase:
                 else:
                     raise
 
-    def _do_post(self, endpoint: str, data: dict, authenticated: bool = False):
-        if authenticated and not self._is_token_valid():
-            self.login(self._username, self._password)
-
+    def _do_post(self, endpoint: str, data: dict, authenticated: bool = False, retries=3):
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if authenticated:
+            if not self._is_token_valid():
+                self.login(self._username, self._password)
             headers["Cookie"] = self._auth_cookie()
 
-        return requests.post(
-            self._url_for_endpoint(endpoint), data=json.dumps(data), headers=headers
-        )
+        for i in range(retries):
+            try:
+                response = self.session.post(
+                    self._url_for_endpoint(endpoint),
+                    data=json.dumps(data),
+                    headers=headers
+                )
+                response.raise_for_status()
+                return response
+            except requests.RequestException as e:
+                if i < retries - 1:
+                    time.sleep(0.5)  # Wait before retrying
+                    continue
+                else:
+                    # Optionally, you could log the exception here
+                    raise 
 
     def _do_put(self, endpoint: str, data: dict, authenticated: bool = False):
         if authenticated and not self._is_token_valid():
@@ -769,6 +781,33 @@ class Kickbase:
             return data
         else:
             raise KickbaseException()
+
+    def get_team_ids(self):
+        temp = self.leagueTable()
+        return [(id["tid"], id["tn"]) for id in temp]
+    
+    def TeamsInfo(self):
+        idnames = self.get_team_ids()
+        ids = [i[0] for i in idnames]
+        names = [i[1] for i in idnames]
+        logos = []
+        for id in ids:
+            url = f"https://kickbase.b-cdn.net/pool/teams/{id}.png"
+            logos.append(url)
+            
+        """      r = httpx.get(url)
+            if r.status_code == 200:
+                data = dict(r.json().get("p")[0])
+                if "team" in data.keys():
+                    data = data["team"]
+                else:
+                    data = None
+                logos.append(data)
+            else:
+                raise KickbaseException() """
+        
+        teams = {"TeamID" : ids, "Name" : names, "Logo": logos}
+        return teams
 
     def matches(self, matchDay=0):
         url = f"/competition/matches?matchDay={matchDay}"
