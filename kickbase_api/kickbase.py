@@ -1,12 +1,13 @@
+import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Union
-import requests
-import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+
 import httpx
-from kickbase_api.exceptions import KickbaseLoginException, KickbaseException
-from kickbase_api.models._transforms import parse_date, date_to_string
+
+from kickbase_api.exceptions import KickbaseException, KickbaseLoginException
+from kickbase_api.models._transforms import date_to_string, parse_date
 from kickbase_api.models.chat_item import ChatItem
 from kickbase_api.models.feed_item import FeedItem
 from kickbase_api.models.feed_item_comment import FeedItemComment
@@ -45,8 +46,8 @@ class Kickbase:
         self.base_url = base_url
         self.firestore_project = firestore_project
         self.google_identity_toolkit_api_key = google_identity_toolkit_api_key
-        # Hinzufügen einer wiederverwendbaren Session:
-        self.session = requests.Session()
+        # Switching to a synchronous HTTP client:
+        self.client = httpx.Client()
 
     def login(self, username: str, password: str) -> (User, [LeagueData]):
         data = {"email": username, "password": password, "ext": False}
@@ -488,6 +489,141 @@ class Kickbase:
         else:
             raise KickbaseException()
 
+    def fetch_players_in_range(self, start, end):
+        url = f"/competition/search?start={start}&end={end}"
+        r = self._do_get(url, True)
+        if r.status_code == 200:
+            return [Player(v) for v in r.json()["p"]]
+        else:
+            raise KickbaseException()
+
+    def fetch_user_id(self, player, league_id):
+        url = f"/leagues/{league_id}/players/{player.id}/stats"
+        r = self._do_get(url, True)
+        if r.status_code == 200:
+            player.seasons = r.json().get("seasons")
+            user_id = r.json().get("userId")
+            if user_id is not None:
+                player.user_id = user_id
+        return player
+
+    def get_all_players(self, league_id) -> [Player]:
+        players = []
+        ranges = [(i, i + 24) for i in range(0, 700, 25)]
+
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            futures = [executor.submit(self.fetch_players_in_range, *r) for r in ranges]
+            for future in as_completed(futures):
+                try:
+                    players.extend(future.result())
+                except Exception as e:
+                    print(f"Error fetching players in range: {e}")
+
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            futures = [
+                executor.submit(self.fetch_user_id, p, league_id) for p in players
+            ]
+            for i, future in enumerate(as_completed(futures)):
+                try:
+                    players[i] = future.result()
+                except Exception as e:
+                    print(f"Error fetching user id for player: {e}")
+
+        return players
+
+    def leagueTable(self, matchDay=0):
+        url = f"/competition/table?matchDay={matchDay}"
+        r = self._do_get(url, True)
+        if r.status_code == 200:
+            data = r.json().get("t")
+            return data
+        else:
+            raise KickbaseException()
+
+    def get_team_ids(self):
+        temp = self.leagueTable()
+        return [(id["tid"], id["tn"]) for id in temp]
+
+    def TeamsInfo(self):
+        idnames = self.get_team_ids()
+        ids = [i[0] for i in idnames]
+        names = [i[1] for i in idnames]
+        logos = []
+        for id in ids:
+            url = f"https://kickbase.b-cdn.net/pool/teams/{id}.png"
+            logos.append(url)
+
+        """      r = httpx.get(url)
+            if r.status_code == 200:
+                data = dict(r.json().get("p")[0])
+                if "team" in data.keys():
+                    data = data["team"]
+                else:
+                    data = None
+                logos.append(data)
+            else:
+                raise KickbaseException() """
+
+        teams = {"TeamID": ids, "Name": names, "Logo": logos}
+        return teams
+
+    def matches(self, matchDay=0):
+        url = f"/competition/matches?matchDay={matchDay}"
+        r = self._do_get(url, True)
+        if r.status_code == 200:
+            data = r.json().get("m")
+            return data
+        else:
+            raise KickbaseException()
+
+    def get_current_md(self):
+        url = f"/competition/matches?matchDay="
+        r = self._do_get(url, True)
+        if r.status_code == 200:
+            cmd = r.json().get("cmd")
+        return cmd
+
+    def get_next_games(self, team_id, next_n_games=5):
+        # get current md
+        cmd = self.get_current_md()
+
+        # get next n mds
+        mds = []
+        for i in range(cmd, cmd + 5):
+            url = f"/competition/matches?matchDay={i}"
+            r = self._do_get(url, True)
+            if r.status_code == 200:
+                mds.append(r.json().get("m"))
+        ngs = []
+        for md in mds:
+            for game in md:
+                if game.get("t1i") == str(team_id):
+                    ngs.append(("H", game.get("t2i")))
+                if game.get("t2i") == str(team_id):
+                    ngs.append(("A", game.get("t1i")))
+
+        return ngs
+
+    def player_market_history(self, league_id, player_id):
+        url = f"/leagues/{league_id}/players/{player_id}/feed"
+        r = self._do_get(url, True)
+        user_id_b = []
+        user_id_s = []
+        value = []
+
+        if r.status_code == 200:
+            feed = r.json()["items"]
+            for fe in feed:
+                if "s" in fe["meta"].keys() and "b" in fe["meta"].keys():
+                    user_id_b.append(fe["meta"]["b"]["i"])
+                    user_id_s.append(fe["meta"]["s"]["i"])
+                    value.append(fe["meta"]["v"])
+
+        return {
+            "Player": player_id,
+            "Transaction": {"Buyer": user_id_b, "Seller": user_id_s, "Value": value},
+        }
+
     def chat_token(self) -> str:
         if not self._is_token_valid():
             self.login(self._username, self._password)
@@ -675,17 +811,21 @@ class Kickbase:
 
         for i in range(retries):
             try:
-                r = self.session.get(self._url_for_endpoint(endpoint), headers=headers)
-                r.raise_for_status()
-                return r
-            except requests.RequestException as e:
+                response = self.client.get(
+                    self._url_for_endpoint(endpoint), headers=headers
+                )
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError as e:
                 if i < retries - 1:
                     time.sleep(0.5)
                     continue
                 else:
                     raise
 
-    def _do_post(self, endpoint: str, data: dict, authenticated: bool = False, retries=3):
+    def _do_post(
+        self, endpoint: str, data: dict, authenticated: bool = False, retries=3
+    ):
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if authenticated:
             if not self._is_token_valid():
@@ -694,20 +834,19 @@ class Kickbase:
 
         for i in range(retries):
             try:
-                response = self.session.post(
+                response = self.client.post(
                     self._url_for_endpoint(endpoint),
                     data=json.dumps(data),
-                    headers=headers
+                    headers=headers,
                 )
                 response.raise_for_status()
                 return response
-            except requests.RequestException as e:
+            except httpx.HTTPStatusError as e:
                 if i < retries - 1:
-                    time.sleep(0.5)  # Wait before retrying
+                    time.sleep(0.5)
                     continue
                 else:
-                    # Optionally, you could log the exception here
-                    raise 
+                    raise
 
     def _do_put(self, endpoint: str, data: dict, authenticated: bool = False):
         if authenticated and not self._is_token_valid():
@@ -717,9 +856,11 @@ class Kickbase:
         if authenticated:
             headers["Cookie"] = self._auth_cookie()
 
-        return requests.put(
+        response = self.client.put(
             self._url_for_endpoint(endpoint), data=json.dumps(data), headers=headers
         )
+        response.raise_for_status()
+        return response
 
     def _do_delete(self, endpoint: str, authenticated: bool = False):
         if authenticated and not self._is_token_valid():
@@ -729,119 +870,6 @@ class Kickbase:
         if authenticated:
             headers["Cookie"] = self._auth_cookie()
 
-        return requests.delete(self._url_for_endpoint(endpoint), headers=headers)
-
-    def fetch_players_in_range(self, start, end):
-        url = f"/competition/search?start={start}&end={end}"
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            return [Player(v) for v in r.json()["p"]]
-        else:
-            raise KickbaseException()
-
-    def fetch_user_id(self, player, league_id):
-        url = f"/leagues/{league_id}/players/{player.id}/stats"
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            player.seasons = r.json().get("seasons")
-            user_id = r.json().get("userId")
-            if user_id is not None:
-                player.user_id = user_id
-        return player
-
-    def get_all_players(self, league_id) -> [Player]:
-        players = []
-        ranges = [(i, i + 24) for i in range(0, 700, 25)]
-
-        with ThreadPoolExecutor(max_workers=16) as executor:
-            futures = [executor.submit(self.fetch_players_in_range, *r) for r in ranges]
-            for future in as_completed(futures):
-                try:
-                    players.extend(future.result())
-                except Exception as e:
-                    print(f"Error fetching players in range: {e}")
-
-        with ThreadPoolExecutor(max_workers=16) as executor:
-            futures = [
-                executor.submit(self.fetch_user_id, p, league_id) for p in players
-            ]
-            for i, future in enumerate(as_completed(futures)):
-                try:
-                    players[i] = future.result()
-                except Exception as e:
-                    print(f"Error fetching user id for player: {e}")
-
-        return players
-
-    def leagueTable(self, matchDay=0):
-        url = f"/competition/table?matchDay={matchDay}"
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            data = r.json().get("t")
-            return data
-        else:
-            raise KickbaseException()
-
-    def get_team_ids(self):
-        temp = self.leagueTable()
-        return [(id["tid"], id["tn"]) for id in temp]
-    
-    def TeamsInfo(self):
-        idnames = self.get_team_ids()
-        ids = [i[0] for i in idnames]
-        names = [i[1] for i in idnames]
-        logos = []
-        for id in ids:
-            url = f"https://kickbase.b-cdn.net/pool/teams/{id}.png"
-            logos.append(url)
-            
-        """      r = httpx.get(url)
-            if r.status_code == 200:
-                data = dict(r.json().get("p")[0])
-                if "team" in data.keys():
-                    data = data["team"]
-                else:
-                    data = None
-                logos.append(data)
-            else:
-                raise KickbaseException() """
-        
-        teams = {"TeamID" : ids, "Name" : names, "Logo": logos}
-        return teams
-
-    def matches(self, matchDay=0):
-        url = f"/competition/matches?matchDay={matchDay}"
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            data = r.json().get("m")
-            return data
-        else:
-            raise KickbaseException()
-
-    def get_current_md(self):
-        url = f"/competition/matches?matchDay="
-        r = self._do_get(url, True)
-        if r.status_code == 200:
-            cmd = r.json().get("cmd")
-        return cmd
-
-    def get_next_games(self, team_id, next_n_games=5):
-        # get current md
-        cmd = self.get_current_md()
-
-        # get next n mds
-        mds = []
-        for i in range(cmd, cmd + 5):
-            url = f"/competition/matches?matchDay={i}"
-            r = self._do_get(url, True)
-            if r.status_code == 200:
-                mds.append(r.json().get("m"))
-        ngs = []
-        for md in mds:
-            for game in md:
-                if game.get("t1i") == str(team_id):
-                    ngs.append(("H", game.get("t2i")))
-                if game.get("t2i") == str(team_id):
-                    ngs.append(("A", game.get("t1i")))
-
-        return ngs
+        response = self.client.delete(self._url_for_endpoint(endpoint), headers=headers)
+        response.raise_for_status()
+        return response
